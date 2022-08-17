@@ -1,54 +1,92 @@
-// Задание - поиск стран
-// Создай фронтенд часть приложения поиска данных о стране по её частичному или полному имени. Посмотри демо видео работы приложения.
-
-// HTTP-запросы
-// Используй публичный API Rest Countries, а именно ресурс name, возвращающий массив объектов стран удовлетворивших критерий поиска. Добавь минимальное оформление элементов интерфейса.
-
-// Напиши функцию fetchCountries(name) которая делает HTTP-запрос на ресурс name и возвращает промис с массивом стран - результатом запроса. Вынеси её в отдельный файл fetchCountries.js и сделай именованный экспорт.
-
-// Фильтрация полей
-// В ответе от бэкенда возвращаются объекты, большая часть свойств которых тебе не пригодится. Чтобы сократить объем передаваемых данных добавь строку параметров запроса - так этот бэкенд реализует фильтрацию полей. Ознакомься с документацией синтаксиса фильтров.
-
-// Тебе нужны только следующие свойства:
-
-// name.official - полное имя страны
-// capital - столица
-// population - население
-// flags.svg - ссылка на изображение флага
-// languages - массив языков
-// Поле поиска
-// Название страны для поиска пользователь вводит в текстовое поле input#search-box. HTTP-запросы выполняются при наборе имени страны, то есть по событию input. Но, делать запрос при каждом нажатии клавиши нельзя, так как одновременно получится много запросов и они будут выполняться в непредсказуемом порядке.
-
-// Необходимо применить приём Debounce на обработчике события и делать HTTP-запрос спустя 300мс после того, как пользователь перестал вводить текст. Используй пакет lodash.debounce.
-
-// Если пользователь полностью очищает поле поиска, то HTTP-запрос не выполняется, а разметка списка стран или информации о стране пропадает.
-
-// Выполни санитизацию введенной строки методом trim(), это решит проблему когда в поле ввода только пробелы или они есть в начале и в конце строки.
-
-// Интерфейс
-// Если в ответе бэкенд вернул больше чем 10 стран, в интерфейсе пояляется уведомление о том, что имя должно быть более специфичным. Для уведомлений используй библиотеку notiflix и выводи такую строку "Too many matches found. Please enter a more specific name.".
-
-// Too many matches alert
-
-// Если бэкенд вернул от 2-х до 10-х стран, под тестовым полем отображается список найденных стран. Каждый элемент списка состоит из флага и имени страны.
-
-// Country list UI
-
-// Если результат запроса это массив с одной страной, в интерфейсе отображается разметка карточки с данными о стране: флаг, название, столица, население и языки.
-
-// Country info UI
-
-// ВНИМАНИЕ
-// Достаточно чтобы приложение работало для большинства стран. Некоторые страны, такие как Sudan, могут создавать проблемы, поскольку название страны является частью названия другой страны, South Sudan. Не нужно беспокоиться об этих исключениях.
-
-// Обработка ошибки
-// Если пользователь ввёл имя страны которой не существует, бэкенд вернёт не пустой массив, а ошибку со статус кодом 404 - не найдено. Если это не обработать, то пользователь никогда не узнает о том, что поиск не дал результатов. Добавь уведомление "Oops, there is no country with that name" в случае ошибки используя библиотеку notiflix.
-
-// Error alert
-
-// ВНИМАНИЕ
-// Не забывай о том, что fetch не считает 404 ошибкой, поэтому необходимо явно отклонить промис чтобы можно было словить и обработать ошибку.
-
 import './css/styles.css';
+const debounce = require('lodash.debounce');
+import Notiflix from 'notiflix';
+import CountryApiService from './fetchCountries';
+
+const input = document.querySelector('#search-box');
+const countryListEl = document.querySelector('.country-list');
+const countryInfoEl = document.querySelector('.country-info');
 
 const DEBOUNCE_DELAY = 300;
+const responseSize = 10;
+
+input.addEventListener('input', debounce(onSearchCountry, DEBOUNCE_DELAY));
+
+const countryApiService = new CountryApiService();
+
+function onSearchCountry(e) {
+    e.preventDefault();
+
+    const search = e.target.value;
+    const searchedCountry = search.trim();
+
+    if (searchedCountry === '') {
+        onClearCountryList();
+        onClearCountryInfo();
+    }
+    else {
+        countryApiService.fetchCountry(searchedCountry)
+            .then(data => insertContent(data))
+            .catch(error => console.log(error));  
+    }
+}
+
+function insertContent(countries) {
+
+    if (countries.length === undefined) { 
+        onShowNotifyError();
+        onClearCountryInfo();
+        onClearCountryList();
+    }
+    else if (countries.length === 1) {
+        onCreateCountriesList(countries); 
+        onCreateCountryInfo(countries);
+    }
+    else if (countries.length > 1 & countries.length <= responseSize) {
+        onCreateCountriesList(countries);
+        onClearCountryInfo();
+    }
+    else if (countries.length > responseSize) {
+        onClearCountryInfo();
+        onClearCountryList();
+        onShowNotifyOverflow();
+    }
+}
+
+function onCreateCountriesList(countries) { 
+    countryListEl.innerHTML = listCountry(countries);
+}
+
+const listCountry = (list) => list.reduce((acc, country) => acc + markupCountryList(country), []);
+
+function markupCountryList ({ name, flags }) {
+    return `<li class="country">
+    <img src='${flags.svg}' alt='Flag ${name}'>${name}</li>`;
+};
+
+function onCreateCountryInfo(country) {
+    const { capital, population, languages } = country[0];
+    const language = languages.map(list => list.name).join(', ');
+    const info = `
+    <ul class="country-info-list">
+        <li class="country-info-item"><span>Capital:</span>${capital}</li>
+        <li class="country-info-item"><span>Population:</span>${population}</li>
+        <li class="country-info-item"><span>Languages:</span>${language}</li>
+    </ul>`;
+    countryInfoEl.insertAdjacentHTML('beforeend', info);
+};
+
+function onClearCountryList() {
+    countryListEl.innerHTML = '';
+}
+function onClearCountryInfo() {
+    countryInfoEl.innerHTML = '';
+}
+
+function onShowNotifyError() {
+    Notiflix.Notify.failure('Oops, there is no country with that name');
+}
+
+function onShowNotifyOverflow() {
+    Notiflix.Notify.info('Too many matches found. Please enter a more specific name.');
+}
