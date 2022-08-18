@@ -8,48 +8,44 @@ const countryListEl = document.querySelector('.country-list');
 const countryInfoEl = document.querySelector('.country-info');
 
 const DEBOUNCE_DELAY = 300;
-const responseSize = 10;
+const RESPONSE_SIZE = 10;
 
 input.addEventListener('input', debounce(onSearchCountry, DEBOUNCE_DELAY));
-
-const countryApiService = new CountryApiService();
 
 function onSearchCountry(e) {
     e.preventDefault();
 
-    const search = e.target.value;
-    const searchedCountry = search.trim();
+    const searchedCountry = e.target.value.trim();
 
     if (searchedCountry === '') {
-        onClearCountryList();
-        onClearCountryInfo();
+        removeData();
     }
     else {
-        countryApiService.fetchCountry(searchedCountry)
+        CountryApiService(searchedCountry)
             .then(data => insertContent(data))
-            .catch(error => console.log(error));  
+            .catch(error => {
+                if (error.code === 404) {
+                    notFound()
+                    removeData();
+                }
+                else {
+                    unknownError();
+                }
+            });  
     }
 }
 
 function insertContent(countries) {
+    removeData();
 
-    if (countries.length === undefined) { 
-        onShowNotifyError();
-        onClearCountryInfo();
-        onClearCountryList();
-    }
-    else if (countries.length === 1) {
-        onCreateCountriesList(countries); 
+    if (countries.length === 1) {
         onCreateCountryInfo(countries);
     }
-    else if (countries.length > 1 & countries.length <= responseSize) {
+    else if (countries.length > 1 & countries.length <= RESPONSE_SIZE) {
         onCreateCountriesList(countries);
-        onClearCountryInfo();
     }
-    else if (countries.length > responseSize) {
-        onClearCountryInfo();
-        onClearCountryList();
-        onShowNotifyOverflow();
+    else {
+        manyCountriesError();
     }
 }
 
@@ -65,28 +61,33 @@ function markupCountryList ({ name, flags }) {
 };
 
 function onCreateCountryInfo(country) {
-    const { capital, population, languages } = country[0];
+    const { name, flags, capital, population, languages } = country[0];
     const language = languages.map(list => list.name).join(', ');
+    const selectedCountry = `<li class="country selected">
+    <img src='${flags.svg}' alt='Flag ${name}'>${name}</li>`;
     const info = `
     <ul class="country-info-list">
         <li class="country-info-item"><span>Capital:</span>${capital}</li>
         <li class="country-info-item"><span>Population:</span>${population}</li>
         <li class="country-info-item"><span>Languages:</span>${language}</li>
     </ul>`;
+    countryListEl.innerHTML = selectedCountry;
     countryInfoEl.insertAdjacentHTML('beforeend', info);
 };
 
-function onClearCountryList() {
+function removeData() {
     countryListEl.innerHTML = '';
-}
-function onClearCountryInfo() {
     countryInfoEl.innerHTML = '';
 }
 
-function onShowNotifyError() {
+function notFound() {
     Notiflix.Notify.failure('Oops, there is no country with that name');
 }
 
-function onShowNotifyOverflow() {
+function manyCountriesError() {
     Notiflix.Notify.info('Too many matches found. Please enter a more specific name.');
+}
+
+function unknownError() {
+    Notiflix.Notify.info('Unknown error has occurred');
 }

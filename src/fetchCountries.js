@@ -1,17 +1,15 @@
-const url = 'https://restcountries.com/v2';
-const filter = ['name', 'capital', 'population', 'flags', 'languages'];
-const filterResponse = filter.join(",");
+const URL = 'https://restcountries.com/v2';
+const FILTER = ['name', 'capital', 'population', 'flags', 'languages'];
+const filterResponse = FILTER.join(",");
 
-export default class CountryApiService {
-    constructor() { }
-
-    fetchCountry(searchedCountry) {
-        return fetch(`${url}/name/${searchedCountry}?fields=${filterResponse}`)
-            .then(response => {
-                // if (!response.ok) {
-                //     throw new Error(response.status);
-                // }
-                return response.json();
-            });
-    } 
+export default function fetchCountry(searchedCountry) {
+    return fetch(`${URL}/name/${searchedCountry}?fields=${filterResponse}`)
+        .then(response => {               
+            if (!response.ok) {
+                const error = new Error();
+                error.code = response.status;
+                throw error;
+            }
+            return response.json();
+        });
 }
